@@ -1,0 +1,6 @@
+macaroon_path: "/path/to/macaroon"
+cert_path: "/path/to/cert"
+jobs:
+  - name: "My first job"
+    cron_expression: "*/10 * * * * * *"
+    amount_in_sats: 10000

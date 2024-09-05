@@ -1,0 +1,13 @@
+[package]
+name = "lnrecc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = "0.4.38"
+clap = { version = "4.5.16", features = ["derive"] }
+cron = "0.12.1"
+reqwest = "0.12.7"
+serde = { version = "1.0.209", features = ["derive"] }
+serde_yaml = "0.9.34"
+tokio = "1.40.0"
