@@ -4,3 +4,4 @@ jobs:
   - name: "My first job"
     cron_expression: "*/10 * * * * * *"
     amount_in_sats: 10000
+    ln_address_or_lnurl: "pycan@jouzina.com"

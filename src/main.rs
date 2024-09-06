@@ -2,11 +2,36 @@ use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path, process, str::FromStr, time::Duration};
+use std::{
+    fs,
+    path::Path,
+    process,
+    str::{from_utf8, FromStr},
+    time::Duration,
+};
 
 const DEFAULT_CONFIG: &str = "config.yaml";
 
-fn read_config(file_path: Option<&str>) -> Config {
+fn get_url_from_ln_address_or_lnurl(ln_address_or_lnurl: &str) -> String {
+    if ln_address_or_lnurl.contains("@") {
+        let url_parts: Vec<&str> = ln_address_or_lnurl.split("@").collect();
+
+        format!(
+            "https://{}/.well-known/lnurlp/{}",
+            url_parts[1], url_parts[0]
+        )
+    } else {
+        let lnurl_upper = ln_address_or_lnurl.to_uppercase();
+
+        let (_hrp, data) = bech32::decode(&lnurl_upper).expect("Failed to decode lnurl");
+
+        let url = from_utf8(&data).expect("Failed to convert lnurl bytes to utf8");
+
+        url.to_string()
+    }
+}
+
+fn read_config(file_path: Option<&str>) -> ValidConfig {
     let path = file_path.unwrap_or(DEFAULT_CONFIG);
 
     if !Path::new(path).exists() {
@@ -42,71 +67,48 @@ jobs:
         Ok(config) => config,
     };
 
-    for job in config.jobs.as_deref().unwrap_or(&[]) {
-        let schedule = Schedule::from_str(&job.cron_expression);
-
-        if schedule.is_err() {
-            println!("Job has an invalid schedule: {}", &job.cron_expression);
-
-            process::exit(1);
-        }
-    }
-
-    config
+    ValidConfig::new(&config)
 }
 
-async fn run_scheduler(config: &Config) {
-    match &config.jobs {
-        None => {
-            println!("No jobs to run. Add a job in {}", DEFAULT_CONFIG);
-            // todo: somehow keep the program hanging, waiting for config update
-            return;
-        }
-        Some(config_jobs) => {
-            let mut jobs: Vec<Job> = config_jobs
-                .iter()
-                .map(|config_job| Job::new(config_job.to_owned()))
-                .collect();
+async fn run_scheduler(config: &ValidConfig) {
+    let mut jobs: Vec<Job> = config.jobs.clone();
 
-            loop {
-                // todo: consider finding all the jobs that are due to run
-                let next_job = jobs
-                    .iter_mut()
-                    // this could be made slightly faster using fold instead of filter and min_by_key
-                    // but this is more readable and shouldn't be a bottleneck
-                    .filter(|job| job.next_run.is_some() && job.next_run != job.last_run)
-                    .min_by_key(|job| job.next_run);
+    loop {
+        let next_job = jobs
+            .iter_mut()
+            // this could be made slightly faster using fold instead of filter and min_by_key
+            // but this is more readable and shouldn't be a bottleneck
+            .filter(|job| job.next_run.is_some() && job.next_run != job.last_run)
+            .min_by_key(|job| job.next_run);
 
-                match next_job {
-                    Some(job) => {
-                        let now = Utc::now();
+        match next_job {
+            Some(job) => {
+                let now = Utc::now();
 
-                        let job_next_run = job.next_run.unwrap();
+                let job_next_run = job.next_run.unwrap();
 
-                        let duration_until_next = job_next_run.signed_duration_since(now);
+                let duration_until_next = job_next_run.signed_duration_since(now);
 
-                        let seconds_until_next = duration_until_next.num_seconds() as u64;
+                let seconds_until_next = duration_until_next.num_seconds() as u64;
 
-                        if seconds_until_next > 0 {
-                            println!(
-                                "Waiting to execute job in {} seconds on {}",
-                                seconds_until_next, job_next_run
-                            );
+                if seconds_until_next > 0 {
+                    println!(
+                        "Waiting to execute job in {} seconds on {}",
+                        seconds_until_next, job_next_run
+                    );
 
-                            tokio::time::sleep(Duration::from_secs(seconds_until_next)).await;
-                        };
+                    tokio::time::sleep(Duration::from_secs(seconds_until_next)).await;
+                };
 
-                        job.schedule_next();
+                job.schedule_next();
 
-                        let job_clone = job.clone();
+                let job_clone = job.clone();
 
-                        tokio::spawn(async move {
-                            job_clone.run().await;
-                        });
-                    }
-                    None => break,
-                }
+                tokio::spawn(async move {
+                    job_clone.run().await;
+                });
             }
+            None => break,
         }
     }
 }
@@ -118,23 +120,76 @@ struct Config {
     jobs: Option<Vec<ConfigJob>>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ConfigJob {
+    name: Option<String>,
+    cron_expression: String,
+    amount_in_sats: u32,
+    ln_address_or_lnurl: String,
+    memo: Option<String>,
+}
+
+#[derive(Debug)]
+struct ValidConfig {
+    macaroon_path: String,
+    cert_path: String,
+    jobs: Vec<Job>,
+}
+
+impl ValidConfig {
+    fn new(config: &Config) -> Self {
+        let jobs = match &config.jobs {
+            None => {
+                println!("No jobs to run. Add a job in {}", DEFAULT_CONFIG);
+
+                process::exit(1);
+            }
+            Some(jobs) => jobs.iter().map(|job| Job::new(job.to_owned())).collect(),
+        };
+
+        // todo: attempt to query ln node
+
+        Self {
+            cert_path: config.cert_path.to_owned(),
+            macaroon_path: config.macaroon_path.to_owned(),
+            jobs,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Job {
     config_job: ConfigJob,
     schedule: Schedule,
+    url: String,
     next_run: Option<DateTime<Utc>>,
     last_run: Option<DateTime<Utc>>,
 }
 
 impl Job {
     fn new(config_job: ConfigJob) -> Self {
-        let schedule = Schedule::from_str(&config_job.cron_expression).unwrap(); // this should work, already validated in read_config
+        let schedule_result = Schedule::from_str(&config_job.cron_expression);
+
+        let schedule = match schedule_result {
+            Ok(schedule) => schedule,
+            Err(_err) => {
+                println!(
+                    "Job has an invalid schedule: {}",
+                    &config_job.cron_expression
+                );
+
+                process::exit(1);
+            }
+        };
 
         let next_run = schedule.upcoming(Utc).next();
+
+        let url = get_url_from_ln_address_or_lnurl(&config_job.ln_address_or_lnurl);
 
         Self {
             config_job,
             schedule,
+            url,
             next_run,
             last_run: None,
         }
@@ -160,13 +215,6 @@ impl Job {
 
         println!("Finished job: {:?}", self.config_job.name);
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct ConfigJob {
-    name: Option<String>,
-    cron_expression: String,
-    amount_in_sats: u32,
 }
 
 #[derive(Parser, Debug)]
