@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path, process, str::FromStr, thread, time::Duration};
+use std::{fs, path::Path, process, str::FromStr, time::Duration};
 
 const DEFAULT_CONFIG: &str = "config.yaml";
 
@@ -55,7 +55,7 @@ jobs:
     config
 }
 
-fn run_scheduler(config: &Config) {
+async fn run_scheduler(config: &Config) {
     match &config.jobs {
         None => {
             println!("No jobs to run. Add a job in {}", DEFAULT_CONFIG);
@@ -63,16 +63,14 @@ fn run_scheduler(config: &Config) {
             return;
         }
         Some(config_jobs) => {
-            let jobs: Vec<Job> = config_jobs
+            let mut jobs: Vec<Job> = config_jobs
                 .iter()
-                .map(|config_job| Job::new(config_job))
+                .map(|config_job| Job::new(config_job.to_owned()))
                 .collect();
-
-            let mut jobs_mut = jobs.clone();
 
             loop {
                 // todo: consider finding all the jobs that are due to run
-                let next_job = jobs_mut
+                let next_job = jobs
                     .iter_mut()
                     // this could be made slightly faster using fold instead of filter and min_by_key
                     // but this is more readable and shouldn't be a bottleneck
@@ -95,10 +93,16 @@ fn run_scheduler(config: &Config) {
                                 seconds_until_next, job_next_run
                             );
 
-                            thread::sleep(Duration::from_secs(seconds_until_next));
+                            tokio::time::sleep(Duration::from_secs(seconds_until_next)).await;
                         };
 
-                        job.run();
+                        job.schedule_next();
+
+                        let job_clone = job.clone();
+
+                        tokio::spawn(async move {
+                            job_clone.run().await;
+                        });
                     }
                     None => break,
                 }
@@ -115,15 +119,15 @@ struct Config {
 }
 
 #[derive(Debug, Clone)]
-struct Job<'a> {
-    config_job: &'a ConfigJob,
+struct Job {
+    config_job: ConfigJob,
     schedule: Schedule,
     next_run: Option<DateTime<Utc>>,
     last_run: Option<DateTime<Utc>>,
 }
 
-impl<'a> Job<'a> {
-    fn new(config_job: &'a ConfigJob) -> Self {
+impl Job {
+    fn new(config_job: ConfigJob) -> Self {
         let schedule = Schedule::from_str(&config_job.cron_expression).unwrap(); // this should work, already validated in read_config
 
         let next_run = schedule.upcoming(Utc).next();
@@ -145,10 +149,16 @@ impl<'a> Job<'a> {
             .find(|time| time != &self.last_run.unwrap());
     }
 
-    fn run(&mut self) {
-        self.schedule_next();
+    async fn run(&self) {
+        println!(
+            "Running job: {:?} at {:?}",
+            self.config_job.name,
+            Utc::now()
+        );
 
-        println!("Running job: {:?} at {:?}", self.config_job, self.last_run);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        println!("Finished job: {:?}", self.config_job.name);
     }
 }
 
@@ -179,7 +189,8 @@ enum Commands {
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     println!("{:?}", cli);
@@ -188,5 +199,5 @@ fn main() {
 
     println!("{:?}", config);
 
-    run_scheduler(&config);
+    run_scheduler(&config).await;
 }
