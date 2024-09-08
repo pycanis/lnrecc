@@ -1,5 +1,6 @@
-macaroon_path: "/path/to/macaroon"
-cert_path: "/path/to/cert"
+macaroon_path: "admin.macaroon"
+cert_path: "tls.cert"
+server_url: "https://karel:10009"
 jobs:
   - name: "My first job"
     cron_expression: "*/10 * * * * * *"

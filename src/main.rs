@@ -31,45 +31,6 @@ fn get_url_from_ln_address_or_lnurl(ln_address_or_lnurl: &str) -> String {
     }
 }
 
-fn read_config(file_path: Option<&str>) -> ValidConfig {
-    let path = file_path.unwrap_or(DEFAULT_CONFIG);
-
-    if !Path::new(path).exists() {
-        let default_config = r#"macaroon_path: "/path/to/macaroon"
-cert_path: "/path/to/cert"
-jobs:
-#  - name: "My first job"
-#    schedule: "0 30 9,12,15 1,15 May-Aug Mon,Wed,Fri 2018/2"
-#    amount_in_sats: 10000"#;
-
-        fs::write(path, default_config).expect("Failed to create default config");
-    }
-
-    let config_raw_result = fs::read_to_string(path);
-
-    let config_data = match config_raw_result {
-        Ok(config_raw) => config_raw,
-        Err(err) => {
-            println!("Failed to read config due to: {:?}", err);
-
-            process::exit(1);
-        }
-    };
-
-    let config_result = serde_yaml::from_str::<Config>(&config_data);
-
-    let config = match config_result {
-        Err(error) => {
-            println!("Failed to parse config due to: {:?}", error);
-
-            process::exit(1);
-        }
-        Ok(config) => config,
-    };
-
-    ValidConfig::new(&config)
-}
-
 async fn run_scheduler(config: &ValidConfig) {
     let mut jobs: Vec<Job> = config.jobs.clone();
 
@@ -117,6 +78,7 @@ async fn run_scheduler(config: &ValidConfig) {
 struct Config {
     macaroon_path: String,
     cert_path: String,
+    server_url: String,
     jobs: Option<Vec<ConfigJob>>,
 }
 
@@ -137,7 +99,44 @@ struct ValidConfig {
 }
 
 impl ValidConfig {
-    fn new(config: &Config) -> Self {
+    async fn new(file_path: Option<&str>) -> Self {
+        let path = file_path.unwrap_or(DEFAULT_CONFIG);
+
+        if !Path::new(path).exists() {
+            let default_config = r#"macaroon_path: "/path/to/macaroon"
+cert_path: "/path/to/cert"
+server_url: "http://127.0.0.1:10009"
+jobs:
+#  - name: "My first job"
+#    schedule: "0 30 9,12,15 1,15 May-Aug Mon,Wed,Fri 2018/2"
+#    amount_in_sats: 10000
+#    ln_address_or_lnurl: "nick@domain.com""#;
+
+            fs::write(path, default_config).expect("Failed to create default config");
+        }
+
+        let config_raw_result = fs::read_to_string(path);
+
+        let config_data = match config_raw_result {
+            Ok(config_raw) => config_raw,
+            Err(err) => {
+                println!("Failed to read config due to: {:?}", err);
+
+                process::exit(1);
+            }
+        };
+
+        let config_result = serde_yaml::from_str::<Config>(&config_data);
+
+        let config = match config_result {
+            Err(error) => {
+                println!("Failed to parse config due to: {:?}", error);
+
+                process::exit(1);
+            }
+            Ok(config) => config,
+        };
+
         let jobs = match &config.jobs {
             None => {
                 println!("No jobs to run. Add a job in {}", DEFAULT_CONFIG);
@@ -147,7 +146,21 @@ impl ValidConfig {
             Some(jobs) => jobs.iter().map(|job| Job::new(job.to_owned())).collect(),
         };
 
-        // todo: attempt to query ln node
+        let mut lnd_client = tonic_lnd::connect(
+            config.server_url.to_owned(),
+            config.cert_path.to_owned(),
+            config.macaroon_path.to_owned(),
+        )
+        .await
+        .expect("failed to connect");
+
+        let info = lnd_client
+            .lightning()
+            .get_info(tonic_lnd::lnrpc::GetInfoRequest {})
+            .await
+            .expect("failed to get info");
+
+        println!("{:#?}", info);
 
         Self {
             cert_path: config.cert_path.to_owned(),
@@ -243,7 +256,7 @@ async fn main() {
 
     println!("{:?}", cli);
 
-    let config = read_config(cli.config_path.as_deref());
+    let config = ValidConfig::new(cli.config_path.as_deref()).await;
 
     println!("{:?}", config);
 
