@@ -1,11 +1,11 @@
 pub mod config {
     use crate::job::job::Job;
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
     use std::{fs, path::Path, process};
 
     const DEFAULT_CONFIG_PATH: &str = "config.yaml";
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Deserialize)]
     struct Config {
         macaroon_path: String,
         cert_path: String,
@@ -13,7 +13,7 @@ pub mod config {
         jobs: Option<Vec<ConfigJob>>,
     }
 
-    #[derive(Debug, Serialize, Deserialize, Clone)]
+    #[derive(Debug, Deserialize, Clone)]
     pub struct ConfigJob {
         pub name: Option<String>,
         pub cron_expression: String,
