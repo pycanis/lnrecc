@@ -1,7 +1,7 @@
 use clap::Parser;
-use cli::cli::Cli;
-use config::config::ValidConfig;
-use scheduler::scheduler::run_scheduler;
+use cli::Cli;
+use config::ValidConfig;
+use scheduler::run_scheduler;
 
 mod cli;
 mod config;
