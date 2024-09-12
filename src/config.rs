@@ -37,7 +37,7 @@ pub mod config {
             if !Path::new(path).exists() {
                 let default_config = r#"macaroon_path: "~/.lnd/data/chain/bitcoin/mainnet/admin.macaroon"
 cert_path: "~/.lnd/tls.cert"
-server_url: "http://127.0.0.1:10009"
+server_url: "https://127.0.0.1:10009"
 jobs:
 #  - name: "My first job"
 #    schedule: "0 30 9,12,15 1,15 May-Aug Mon,Wed,Fri 2018/2"
