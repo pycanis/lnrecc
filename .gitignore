@@ -1,3 +1,4 @@
-/target
+target
 tls.cert
 admin.macaroon
+config.yaml

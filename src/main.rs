@@ -9,6 +9,7 @@ use std::{
     str::{from_utf8, FromStr},
     time::Duration,
 };
+use tonic_lnd::lnrpc::payment::PaymentStatus;
 
 const DEFAULT_CONFIG: &str = "config.yaml";
 
@@ -64,14 +65,39 @@ async fn run_scheduler(config: &ValidConfig) {
                 job.schedule_next();
 
                 let job_clone = job.clone();
+                let config_clone = config.clone();
 
                 tokio::spawn(async move {
-                    job_clone.run().await;
+                    job_clone.run(config_clone).await;
                 });
             }
             None => break,
         }
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LnurlInitResponse {
+    callback: String,
+    max_sendable: u64,
+    min_sendable: u64,
+    comment_allowed: u64,
+    // ...
+}
+
+// #[derive(Deserialize)]
+// struct LnurlResponseSuccessAction {
+//     tag: String,
+//     message: String,
+// }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LnurlResponse {
+    pr: String,
+    //  routes: Vec<String>,
+    //  success_action: LnurlResponseSuccessAction,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -91,10 +117,11 @@ struct ConfigJob {
     memo: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ValidConfig {
     macaroon_path: String,
     cert_path: String,
+    server_url: String,
     jobs: Vec<Job>,
 }
 
@@ -103,14 +130,15 @@ impl ValidConfig {
         let path = file_path.unwrap_or(DEFAULT_CONFIG);
 
         if !Path::new(path).exists() {
-            let default_config = r#"macaroon_path: "/path/to/macaroon"
-cert_path: "/path/to/cert"
+            let default_config = r#"macaroon_path: "~/.lnd/data/chain/bitcoin/mainnet/admin.macaroon"
+cert_path: "~/.lnd/tls.cert"
 server_url: "http://127.0.0.1:10009"
 jobs:
 #  - name: "My first job"
 #    schedule: "0 30 9,12,15 1,15 May-Aug Mon,Wed,Fri 2018/2"
 #    amount_in_sats: 10000
-#    ln_address_or_lnurl: "nick@domain.com""#;
+#    ln_address_or_lnurl: "nick@domain.com"
+#    memo: "Scheduled payment coming your way!""#;
 
             fs::write(path, default_config).expect("Failed to create default config");
         }
@@ -146,25 +174,18 @@ jobs:
             Some(jobs) => jobs.iter().map(|job| Job::new(job.to_owned())).collect(),
         };
 
-        let mut lnd_client = tonic_lnd::connect(
+        tonic_lnd::connect(
             config.server_url.to_owned(),
             config.cert_path.to_owned(),
             config.macaroon_path.to_owned(),
         )
         .await
-        .expect("failed to connect");
-
-        let info = lnd_client
-            .lightning()
-            .get_info(tonic_lnd::lnrpc::GetInfoRequest {})
-            .await
-            .expect("failed to get info");
-
-        println!("{:#?}", info);
+        .expect("Failed to verify connection to LND node.");
 
         Self {
             cert_path: config.cert_path.to_owned(),
             macaroon_path: config.macaroon_path.to_owned(),
+            server_url: config.server_url.to_owned(),
             jobs,
         }
     }
@@ -217,16 +238,72 @@ impl Job {
             .find(|time| time != &self.last_run.unwrap());
     }
 
-    async fn run(&self) {
+    async fn run(&self, config: ValidConfig) -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "Running job: {:?} at {:?}",
             self.config_job.name,
             Utc::now()
         );
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        let lnurl_init_response = reqwest::get(self.url.clone())
+            .await?
+            .json::<LnurlInitResponse>()
+            .await?;
+
+        // todo: validate
+
+        let lnurl_request_url = format!(
+            "{}?amount={}&comment={}",
+            lnurl_init_response.callback,
+            self.config_job.amount_in_sats * 1000,
+            self.config_job.memo.to_owned().unwrap_or("".to_string())
+        );
+
+        let lnurl_response = reqwest::get(lnurl_request_url)
+            .await?
+            .json::<LnurlResponse>()
+            .await?;
+
+        let mut client = tonic_lnd::connect(
+            config.server_url.to_owned(),
+            config.cert_path.to_owned(),
+            config.macaroon_path.to_owned(),
+        )
+        .await?;
+
+        let payment_response = client
+            .router()
+            .send_payment_v2(tonic_lnd::routerrpc::SendPaymentRequest {
+                payment_request: lnurl_response.pr,
+                timeout_seconds: 30,
+                fee_limit_sat: (self.config_job.amount_in_sats as f32 * 0.01).ceil() as i64, // max 1% fee
+                ..Default::default()
+            })
+            .await?;
+
+        let mut payment_stream = payment_response.into_inner();
+
+        while let Some(payment) = payment_stream.message().await? {
+            println!("Payment update: {:?}", payment);
+
+            let payment_status = PaymentStatus::from_i32(payment.status).unwrap();
+
+            match payment_status {
+                PaymentStatus::Succeeded => {
+                    println!("Payment success...");
+                }
+                PaymentStatus::InFlight => {
+                    println!("Payment in process...");
+                }
+                _ => {
+                    println!("Payment failed...");
+                }
+            }
+        }
 
         println!("Finished job: {:?}", self.config_job.name);
+
+        Ok(())
     }
 }
 
