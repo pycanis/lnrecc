@@ -2,3 +2,4 @@ target
 tls.cert
 admin.macaroon
 config.yaml
+lnrecc.log

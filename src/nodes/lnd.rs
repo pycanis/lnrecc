@@ -1,3 +1,4 @@
+use log::{info, warn};
 use std::error::Error;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 
@@ -23,7 +24,7 @@ pub async fn pay_invoice(
         .send_payment_v2(tonic_lnd::routerrpc::SendPaymentRequest {
             payment_request: invoice.pr,
             timeout_seconds: 30,
-            fee_limit_sat: (job.amount_in_sats as f32 * 0.01).ceil() as i64, // max 1% fee
+            fee_limit_sat: (job.amount_in_sats as f32 * 0.05).ceil() as i64, // max 1% fee
             ..Default::default()
         })
         .await?;
@@ -31,19 +32,17 @@ pub async fn pay_invoice(
     let mut payment_stream = payment_response.into_inner();
 
     while let Some(payment) = payment_stream.message().await? {
-        println!("Payment update: {:?}", payment);
-
         let payment_status = PaymentStatus::from_i32(payment.status).unwrap();
 
         match payment_status {
             PaymentStatus::Succeeded => {
-                println!("Payment success...");
+                info!("Payment succeeded!");
             }
             PaymentStatus::InFlight => {
-                println!("Payment in process...");
+                info!("Payment in progress...");
             }
             _ => {
-                println!("Payment failed...");
+                warn!("Payment failed due to: {:?}", payment.failure_reason());
             }
         }
     }

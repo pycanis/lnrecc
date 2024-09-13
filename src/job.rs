@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use log::error;
 use std::{process, str::FromStr};
 
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct Job {
-    config_job: ConfigJob,
+    pub config_job: ConfigJob,
     schedule: Schedule,
     url: String,
     pub next_run: Option<DateTime<Utc>>,
@@ -24,7 +25,7 @@ impl Job {
         let schedule = match schedule_result {
             Ok(schedule) => schedule,
             Err(_err) => {
-                println!(
+                error!(
                     "Job has an invalid schedule: {}",
                     &config_job.cron_expression
                 );
@@ -56,19 +57,11 @@ impl Job {
     }
 
     pub async fn run(&self, config: ValidConfig) -> Result<(), Box<dyn std::error::Error>> {
-        println!(
-            "Running job: {:?} at {:?}",
-            self.config_job.name,
-            Utc::now()
-        );
-
         let invoice = LnurlService::new(self.config_job.clone())
             .get_invoice(&self.url)
             .await?;
 
         pay_invoice(invoice, &self.config_job, config).await?;
-
-        println!("Finished job: {:?}", self.config_job.name);
 
         Ok(())
     }

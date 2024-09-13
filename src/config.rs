@@ -1,4 +1,5 @@
 use crate::job::Job;
+use log::error;
 use serde::Deserialize;
 use std::{fs, path::Path, process};
 
@@ -52,7 +53,7 @@ jobs:
         let config_data = match config_raw_result {
             Ok(config_raw) => config_raw,
             Err(err) => {
-                println!("Failed to read config due to: {:?}", err);
+                error!("Failed to read config due to: {:?}", err);
 
                 process::exit(1);
             }
@@ -62,7 +63,7 @@ jobs:
 
         let config = match config_result {
             Err(error) => {
-                println!("Failed to parse config due to: {:?}", error);
+                error!("Failed to parse config due to: {:?}", error);
 
                 process::exit(1);
             }
@@ -71,7 +72,7 @@ jobs:
 
         let jobs = match &config.jobs {
             None => {
-                println!("No jobs to run. Add a job in {}", DEFAULT_CONFIG_PATH);
+                error!("No jobs to run. Add a job in {}", DEFAULT_CONFIG_PATH);
 
                 process::exit(1);
             }
