@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use log::info;
+use log::{error, info};
 
 use crate::{config::ValidConfig, job::Job};
 
@@ -50,13 +50,18 @@ pub async fn run_scheduler(config: &ValidConfig) {
                 );
 
                 tokio::spawn(async move {
-                    let _ = job_clone.run(config_clone).await;
+                    let job_result = job_clone.run(config_clone).await;
 
-                    info!(
-                        "Finished job: {} at {}",
-                        job_clone.config_job.name.unwrap_or("<no name>".to_string()),
-                        Utc::now()
-                    );
+                    let job_name = job_clone.config_job.name.unwrap_or("<no name>".to_string());
+
+                    match job_result {
+                        Err(err) => {
+                            error!("Job {} failed: {}", job_name, err);
+                        }
+                        Ok(()) => {
+                            info!("Finished job: {} at {}", job_name, Utc::now());
+                        }
+                    }
                 });
             }
             None => {

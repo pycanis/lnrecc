@@ -5,6 +5,9 @@ use clap::Parser;
 pub struct Cli {
     #[arg(short, long)]
     pub config_path: Option<String>,
+
+    #[arg(short, long)]
+    pub log_path: Option<String>,
     // #[command(subcommand)]
     // command: Commands,
 }

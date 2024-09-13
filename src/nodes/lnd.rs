@@ -40,8 +40,10 @@ pub async fn pay_invoice(
             PaymentStatus::Succeeded => {
                 info!("Payment succeeded!");
 
-                if invoice.success_action.message.capacity() > 0 {
-                    info!("Receiver replied with: {}", invoice.success_action.message);
+                if let Some(success_action) = &invoice.success_action {
+                    if success_action.message.capacity() > 0 {
+                        info!("Receiver replied with: {}", success_action.message);
+                    }
                 }
             }
             PaymentStatus::InFlight => {

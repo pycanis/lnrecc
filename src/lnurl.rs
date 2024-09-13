@@ -25,7 +25,7 @@ pub struct LnurlResponseSuccessAction {
 pub struct LnurlPaymentRequestResponse {
     pub pr: String,
     //  routes: Vec<String>,
-    pub success_action: LnurlResponseSuccessAction,
+    pub success_action: Option<LnurlResponseSuccessAction>,
 }
 
 pub struct LnurlService {
