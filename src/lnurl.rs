@@ -65,7 +65,7 @@ impl LnurlService {
         let request_url = format!(
             "{}?amount={}&comment={}",
             callback,
-            self.config_job.amount_in_sats * 1000,
+            self.config_job.amount_sats * 1000,
             self.config_job.memo.to_owned().unwrap_or("".to_string())
         );
 

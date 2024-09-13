@@ -17,8 +17,9 @@ struct Config {
 pub struct ConfigJob {
     pub name: Option<String>,
     pub cron_expression: String,
-    pub amount_in_sats: u32,
+    pub amount_sats: u32,
     pub ln_address_or_lnurl: String,
+    pub max_fee_sats: Option<i64>,
     pub memo: Option<String>,
 }
 
@@ -41,8 +42,9 @@ server_url: "https://127.0.0.1:10009"
 jobs:
 #  - name: "My first job"
 #    schedule: "0 30 9,12,15 1,15 May-Aug Mon,Wed,Fri 2018/2"
-#    amount_in_sats: 10000
+#    amount_sats: 10000
 #    ln_address_or_lnurl: "nick@domain.com"
+#    max_fee_sats: 5
 #    memo: "Scheduled payment coming your way!""#;
 
             fs::write(path, default_config).expect("Failed to create default config");

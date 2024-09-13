@@ -24,7 +24,9 @@ pub async fn pay_invoice(
         .send_payment_v2(tonic_lnd::routerrpc::SendPaymentRequest {
             payment_request: invoice.pr,
             timeout_seconds: 30,
-            fee_limit_sat: (job.amount_in_sats as f32 * 0.05).ceil() as i64, // max 1% fee
+            fee_limit_sat: job
+                .max_fee_sats
+                .unwrap_or((job.amount_sats as f32 * 0.05).ceil() as i64), // max 1% fee
             ..Default::default()
         })
         .await?;
