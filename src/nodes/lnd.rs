@@ -37,6 +37,10 @@ pub async fn pay_invoice(
         match payment_status {
             PaymentStatus::Succeeded => {
                 info!("Payment succeeded!");
+
+                if invoice.success_action.message.capacity() > 0 {
+                    info!("Receiver replied with: {}", invoice.success_action.message);
+                }
             }
             PaymentStatus::InFlight => {
                 info!("Payment in progress...");

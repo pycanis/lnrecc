@@ -14,18 +14,18 @@ struct LnurlInfoResponse {
     // ...
 }
 
-// #[derive(Deserialize)]
-// struct LnurlResponseSuccessAction {
-//     tag: String,
-//     message: String,
-// }
+#[derive(Deserialize, Clone)]
+pub struct LnurlResponseSuccessAction {
+    //  tag: String,
+    pub message: String,
+}
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LnurlPaymentRequestResponse {
     pub pr: String,
     //  routes: Vec<String>,
-    //  success_action: LnurlResponseSuccessAction,
+    pub success_action: LnurlResponseSuccessAction,
 }
 
 pub struct LnurlService {
