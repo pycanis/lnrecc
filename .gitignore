@@ -1,5 +1,3 @@
 target
-tls.cert
-admin.macaroon
-config.yaml
+data
 lnrecc.log

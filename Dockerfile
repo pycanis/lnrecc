@@ -14,6 +14,10 @@ RUN cargo build --release
 
 FROM debian:bullseye-slim
 
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/local/bin
 
 ARG UID=10001
@@ -30,4 +34,4 @@ USER appuser
 
 COPY --from=build /usr/src/app/target/release/lnrecc .
 
-CMD ["lnrecc"]
+ENTRYPOINT ["lnrecc"]
