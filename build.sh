@@ -1,18 +1,24 @@
 #!/bin/bash
 
+version=$1
+
+if [ -z "$version" ]; then
+  echo "Error: No version argument provided."
+  exit 1
+fi
+
 # ARM64 darwin
 cargo build --release
 
 APP_NAME="lnrecc"
-VERSION="v1.0.0"
-ARCHIVE_NAME="releases/${APP_NAME}-darwin-arm64-${VERSION}.tar.gz"
+ARCHIVE_NAME="releases/${APP_NAME}-darwin-arm64-${version}.tar.gz"
 
 tar -czvf $ARCHIVE_NAME -C target/release $APP_NAME
 
 # AMD64 linux
 
 BUILD_IMAGE_NAME="lnrecc-build"
-ARCHIVE_NAME="releases/${APP_NAME}-linux-amd64-${VERSION}.tar.gz"
+ARCHIVE_NAME="releases/${APP_NAME}-linux-amd64-${version}.tar.gz"
 
 docker build -f Dockerfile-build -t ${BUILD_IMAGE_NAME} --platform linux/amd64 .
 
