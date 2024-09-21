@@ -10,6 +10,11 @@ You need to have a gRPC API access to LND lightning node you want to spend from,
 
 Download the archive from the release page, optionally verify the signature, extract it, create the `config.yaml` with your configuration and run the executable. Or you can clone the repository and build it yourself. Or you can run it in docker.
 
+Optional CLI parameters:
+
+- `--config-path <path>`
+- `--log-path <path>`
+
 ### Software verification (optional, but recommended)
 
 1. Import gpg key. `gpg --keyserver hkps://keys.openpgp.org --recv-keys 54650F2C495A04B2927EDF729936610A65758899`
