@@ -1,7 +1,7 @@
 use crate::job::Job;
 use log::error;
 use serde::Deserialize;
-use std::{fs, path::Path, process};
+use std::{env, fs, path::Path, process};
 
 const DEFAULT_CONFIG_PATH: &str = "config.yaml";
 
@@ -38,7 +38,7 @@ impl ValidConfig {
         if !Path::new(path).exists() {
             let default_config = r#"macaroon_path: "~/.lnd/data/chain/bitcoin/mainnet/admin.macaroon"
 cert_path: "~/.lnd/tls.cert"
-server_url: "https://127.0.0.1:10009"
+server_url: "https://localhost:10009"
 jobs:
 #  - name: "My first job"
 #    schedule: "0 30 9,12,15 1,15 May-Aug Mon,Wed,Fri 2018/2"
@@ -81,18 +81,19 @@ jobs:
             Some(jobs) => jobs.iter().map(|job| Job::new(job.to_owned())).collect(),
         };
 
-        tonic_lnd::connect(
-            config.server_url.to_owned(),
-            config.cert_path.to_owned(),
-            config.macaroon_path.to_owned(),
-        )
-        .await
-        .expect("Failed to verify connection to LND node.");
+        let home_dir = env::var("HOME").unwrap_or("~".to_string());
+
+        let cert_path = config.cert_path.replacen("~", &home_dir, 1);
+        let macaroon_path = config.macaroon_path.replacen("~", &home_dir, 1);
+
+        tonic_lnd::connect(config.server_url.to_owned(), &cert_path, &macaroon_path)
+            .await
+            .expect("Failed to verify connection to LND node.");
 
         Self {
-            cert_path: config.cert_path.to_owned(),
-            macaroon_path: config.macaroon_path.to_owned(),
-            server_url: config.server_url.to_owned(),
+            cert_path,
+            macaroon_path,
+            server_url: config.server_url,
             jobs,
         }
     }
