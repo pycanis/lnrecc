@@ -36,6 +36,8 @@ jobs:
     memo: "Scheduled payment coming your way!"
 ```
 
+Currently, `server_url` mustn't be an IP address, otherwise you run into `InvalidDNSNameError`. If lnd is not running locally and you don't have a domain name for it, add `<ip address> lnd` to your `/etc/hosts` and then in config.yaml use `server_url: "https://lnd:10009"`
+
 `schedule` is a cron-like syntax extended by seconds field (first one) and optionally also year. Here are a few examples:
 
 - `0 * * * * *` run every minute
@@ -53,10 +55,6 @@ All job times are currently in UTC.
 - Posibility to set up notifications after every payment
 - Specify timezones
 - Whatever else comes up
-
-## Limitations
-
-Currently, `server_url` mustn't be an IP address, otherwise you run into `InvalidDNSNameError`. If lnd is not running locally and you don't have a domain name for it, add `<ip address> lnd` to your `/etc/hosts` and then in config.yaml use `server_url: "https://lnd:10009"`
 
 ## Contributing
 
