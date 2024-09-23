@@ -24,8 +24,8 @@ Optional CLI parameters:
 ### Default config
 
 ```
-macaroon_path: "~/.lnd/data/chain/bitcoin/mainnet/admin.macaroon"
-cert_path: "~/.lnd/tls.cert"
+macaroon_path: "/home/my-user/.lnd/data/chain/bitcoin/mainnet/admin.macaroon"
+cert_path: "/home/my-user/.lnd/tls.cert"
 server_url: "https://localhost:10009"
 jobs:
   - name: "My first job"
